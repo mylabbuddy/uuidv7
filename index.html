@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos UUIDv7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=JetBrains+Mono:wght@100;300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #000000;
+            --accent-color: #ffffff;
+            --muted-color: #555555;
+            --dim-border: #1a1a1a;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--accent-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .workspace {
+            width: 100%;
+            max-width: 1000px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4rem;
+        }
+
+        /* Clock Styling */
+        .clock-section {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5rem;
+            color: var(--muted-color);
+            margin-bottom: 2rem;
+        }
+
+        .timer {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 100;
+            font-size: clamp(2rem, 12vw, 6rem);
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }
+
+        .unit-group {
+            display: flex;
+            align-items: baseline;
+        }
+
+        .sep {
+            color: #222;
+            padding: 0 5px;
+            font-weight: 100;
+        }
+
+        .ms-counter {
+            font-size: 0.3em;
+            color: var(--muted-color);
+            margin-left: 1rem;
+            width: 3.5ch;
+            text-align: left;
+        }
+
+        /* UUID Section */
+        .uuid-section {
+            width: 100%;
+            max-width: 700px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .display-container {
+            width: 100%;
+            padding: 40px;
+            border-top: 1px solid var(--dim-border);
+            border-bottom: 1px solid var(--dim-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: border-color 0.5s ease;
+        }
+
+        .display-container:hover {
+            border-color: #333;
+        }
+
+        #uuid-out {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 300;
+            font-size: clamp(0.75rem, 3vw, 1.25rem);
+            color: var(--accent-color);
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            text-align: center;
+            transition: opacity 0.2s;
+        }
+
+        #uuid-out:active {
+            opacity: 0.6;
+        }
+
+        .actions {
+            margin-top: 2rem;
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn {
+            background: transparent;
+            color: var(--muted-color);
+            border: 1px solid var(--dim-border);
+            padding: 8px 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        #notification {
+            position: fixed;
+            bottom: 30px;
+            font-size: 0.65rem;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--muted-color);
+            letter-spacing: 0.2rem;
+            text-transform: uppercase;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="workspace">
+        <!-- Epoch Chronometer -->
+        <div class="clock-section">
+            <div class="label">Unix Epoch Chronometer</div>
+            <div class="timer">
+                <div class="unit-group">
+                    <span id="days">0000</span><span class="sep">:</span>
+                    <span id="hours">00</span><span class="sep">:</span>
+                    <span id="minutes">00</span><span class="sep">:</span>
+                    <span id="seconds">00</span>
+                </div>
+                <div class="ms-counter" id="ms">.000</div>
+            </div>
+        </div>
+
+        <!-- UUIDv7 Generator -->
+        <div class="uuid-section">
+            <div class="label">UUIDv7 Identifier</div>
+            <div class="display-container">
+                <div id="uuid-out" title="Click to copy">
+                    00000000-0000-0000-0000-000000000000
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="refreshUUID()">Regenerate</button>
+                <button class="btn" onclick="copyToClipboard()">Copy</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification">Copied to Clipboard</div>
+
+    <script>
+        /**
+         * UUIDv7 Generation Logic
+         * Uses a 48-bit timestamp from Date.now() + 80 bits of randomness.
+         */
+        function generateUUIDv7() {
+            const now = Date.now();
+            const hexTs = now.toString(16).padStart(12, '0');
+            
+            const randomBytes = new Uint8Array(10);
+            window.crypto.getRandomValues(randomBytes);
+
+            // Version 7: 0x7
+            // Variant: 0x8-b (10xx)
+            const ver = 0x7;
+            const varByte = (randomBytes[2] & 0x3f) | 0x80;
+
+            const p1 = hexTs.slice(0, 8);
+            const p2 = hexTs.slice(8, 12);
+            const p3 = (ver << 12 | (randomBytes[0] << 8 | randomBytes[1]) & 0x0fff).toString(16).padStart(4, '0');
+            const p4 = varByte.toString(16).padStart(2, '0') + randomBytes[3].toString(16).padStart(2, '0');
+            const p5 = Array.from(randomBytes.slice(4)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+        }
+
+        const elements = {
+            days: document.getElementById('days'),
+            hours: document.getElementById('hours'),
+            minutes: document.getElementById('minutes'),
+            seconds: document.getElementById('seconds'),
+            ms: document.getElementById('ms'),
+            uuid: document.getElementById('uuid-out'),
+            notif: document.getElementById('notification')
+        };
+
+        function tick() {
+            const now = Date.now();
+            const totalSeconds = Math.floor(now / 1000);
+            
+            const d = Math.floor(totalSeconds / 86400);
+            const h = Math.floor((totalSeconds % 86400) / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            const ms = now % 1000;
+
+            elements.days.textContent = d.toLocaleString().replace(/,/g, ' ');
+            elements.hours.textContent = String(h).padStart(2, '0');
+            elements.minutes.textContent = String(m).padStart(2, '0');
+            elements.seconds.textContent = String(s).padStart(2, '0');
+            elements.ms.textContent = '.' + String(ms).padStart(3, '0');
+
+            requestAnimationFrame(tick);
+        }
+
+        function refreshUUID() {
+            elements.uuid.textContent = generateUUIDv7();
+        }
+
+        function copyToClipboard() {
+            const text = elements.uuid.textContent.trim();
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+
+            elements.notif.classList.add('show');
+            setTimeout(() => elements.notif.classList.remove('show'), 2000);
+        }
+
+        elements.uuid.addEventListener('click', copyToClipboard);
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            tick();
+            refreshUUID();
+        });
+    </script>
+</body>
+</html>
